@@ -1,0 +1,75 @@
+---
+title: "hw1"
+author: "Ruoyu Liang"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+Q1:supervised learning:a machine learning technique that accurately predict future response given predictors and understand how predictors affect respons. It also finds the “best” model for response given predictor and assess the quality of our predictions and (or) estimation.
+Q2:In regression models, Y is quantitative(Numerical Values) while Y is qualitative with categorical values in classification models.
+Q3:Regression ML:mean absolute error, R-squared. classification ML problems:accuracy, F1-score.
+Q4:(from day 1 lecture)Descriptive models:Choose model to best visually emphasize a trend in data.i.e.using a line on a scatterplot
+Inferential models:Aim is to test theories (Possibly) causal claims State relationship between outcome & predictor(s)
+Predictive models:Aim is to predict Y with minimum 
+reducible error Not focused on hypothesis tests.
+Q5:mechanistic:uses a theory to predict what will happen in the real world.
+Empirically driven:create models by observation and experiment.
+difference is that one of them uses theory and the other one uses experiment.
+similarity: both used for predicting Y.
+I think empirically-driven is more understandable since it is based on real life example and experiment while theories are always hard to understand.
+the bias tradeoff represents tension between the error introduced by the bias and the error produced by the variance. 
+Q6:(1) predictive since they used real data to prediect outcomes.
+2)inferential, since it aims to test relationship between outcome & predictor(s).
+```{r}
+install.packages("tidyverse",repos="https://cran.r-project.org")
+install.packages("tidymodels",repos="https://cran.r-project.org")
+install.packages("ISLR",repos="https://cran.r-project.org")
+
+library(tidyverse)
+library(tidymodels)
+library(ISLR)
+```
+```{r, eval = FALSE}
+mpg
+```
+Exercise1
+```{r}
+ggplot(data=mpg,mapping=aes(hwy))+geom_histogram()
+```
+there are two obvious peaks and it is a random distribution.
+Exercise2
+```{r}
+ggplot(data=mpg,mapping=aes(hwy,cty))+geom_point()
+```
+A positive correlation between these two variables, which means as hwy increases, city will increase.
+Exercise3
+```{r}
+library(ggplot2)
+mpg %>% 
+  ggplot(aes(fct_infreq(manufacturer)))+
+  geom_bar()+coord_flip()
+```
+As we see, dodge produces the most cars and lincoln produces the least.
+Exercise4
+```{r}
+ggplot(data=mpg,aes(group=cyl,y=hwy))+geom_boxplot()
+```
+The box plot continue to be lower on each section when cyl increases.
+Exercise5
+```{r}
+install.packages('corrplot',repos="https://cran.r-project.org")
+library(corrplot)
+corr=cor(mpg %>% dplyr::select(where(is.numeric)))
+corrplot(corr,method=c("number"),type=c('lower'))
+```
+dispel: positively related: cyl  negative:cty and hwy
+cyl: negatively related:cty and hwy
+city:positively related:hwy.
+They mostly make sense. However. year is not related to any other variables.
