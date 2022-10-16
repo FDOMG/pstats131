@@ -1,0 +1,100 @@
+---
+title: "hw2"
+author: "Ruoyu Liang"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+library(tidymodels)
+library(corrplot)
+
+library(readr)
+library(dplyr)
+```
+```{r}
+Abalone <- read_csv("abalone.csv")
+head(Abalone)
+```
+Q1
+```{r}
+Abalone["age"] <- Abalone["rings"]+1.5
+ggplot(Abalone,aes(x=age))+geom_histogram(bins=20)
+```
+Age looks like a normal distribution and the at the age of 12, there is a peak.
+
+Q2
+```{r}
+set.seed(202)
+Abalone_split<-initial_split(Abalone,prop=0.50,
+                             strata = age )
+Abalone_training<-training(Abalone_split)
+abalone_testing<-testing(Abalone_split)
+```
+Q3
+```{r}
+Abalone_training<- Abalone_training %>% select(-rings)
+Abalone_recipe<-recipe(age ~ ., data=Abalone_training) %>% 
+  step_dummy(all_nominal_predictors())
+
+Abalone1<-Abalone_recipe %>% 
+  step_interact(terms= ~ starts_with("type"):shucked_weight+
+                  longest_shell:diameter+
+                  shucked_weight:shell_weight) %>% 
+  step_center(all_predictors()) %>% 
+  step_scale(all_predictors())
+Abalone1
+```
+Q4
+```{r}
+lm<-linear_reg() %>% 
+  set_engine("lm")
+```
+Q5
+```{r}
+lmworkflow<-workflow() %>% 
+  add_model(lm) %>% 
+  add_recipe(Abalone_recipe)
+```
+Q6
+```{r}
+lm<-fit(lmworkflow,Abalone_training)
+female_abalone_age<-data.frame(type="F",longest_shell=0.50,diameter=0.10,height
+                               =0.30, whole_weight=4,shucked_weight=1,
+                               viscera_weight=2,shell_weight=1)
+predict(lm,new_data=female_abalone_age)
+```
+```{r}
+lm %>% 
+  extract_fit_parsnip() %>% 
+  tidy()
+```
+Q7
+```{r}
+library(yardstick)
+Abalone_training_res <- predict(lm, new_data = Abalone_training %>% select(-age))
+Abalone_training_res <- bind_cols(Abalone_training_res, Abalone_training %>% select(age))
+Abalone_training_res %>% 
+  head()
+
+Abalone_training_res %>% 
+  ggplot(aes(x= .pred, y=age))+
+  geom_point(alpha=0.4)+
+  geom_abline(lty=4)+
+  theme_bw()+
+  coord_obs_pred()
+Abalone_metrics<-metric_set(rmse,rsq,mae)
+Abalone_metrics(Abalone_training_res, truth=age,
+                estimate=.pred)
+```
+R square is 54.6 percent, which means 54.6 percent of the data fits.
