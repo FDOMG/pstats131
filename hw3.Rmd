@@ -1,0 +1,169 @@
+---
+title: "hw3"
+author: "Ruoyu Liang"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+```{r}
+library(ggplot2)
+library(tidymodels)
+library(ISLR)  
+library(ISLR2) 
+library(discrim)
+library(poissonreg)
+library(corrr)
+library(klaR) 
+tidymodels_prefer()
+```
+
+```{r}
+titanic <- read.csv("titanic.csv")
+head(titanic)
+titanic$survived<-factor(titanic$survived, levels=c('Yes','No'))
+titanic$pclass<-factor(titanic$pclass)
+```
+
+Q1
+```{r}
+set.seed(1202)
+titanic_split<-initial_split(titanic,prop=0.80,
+                             strata = survived )
+titanic_train<-training(titanic_split)
+titanic_test<-testing(titanic_split)
+```
+using stratified sampling for this data can generate the populations more accurately.
+
+Q2
+```{r}
+ggplot(titanic_train,aes(x=survived))+geom_bar()
+```
+the populations of survived people is more than unsurvived popluations.
+
+Q3
+
+```{r}
+cor_titanic <- titanic_train %>%
+  select(is.numeric) %>%
+  correlate()
+rplot(cor_titanic)
+```
+The pattern is symetrically and evenly distributed, age and sib_sp are negatively realted and parch and sib_sp are postively realted.
+
+Q4
+```{r}
+titanic_recipe <- recipe(survived ~ pclass + sex + age + sib_sp + 
+                           parch + fare, data = titanic_train) %>% 
+  step_impute_linear(age) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_interact(terms= ~ starts_with("sex"):fare+
+                  age:fare)
+titanic_recipe
+```
+Q5
+```{r}
+log_reg <- logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+log_wkflow <- workflow() %>% 
+  add_model(log_reg) %>% 
+  add_recipe(titanic_recipe)
+log_fit <- fit(log_wkflow, titanic_train)
+```
+
+Q6
+```{r}
+lda_mod <- discrim_linear() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+lda_wkflow <- workflow() %>% 
+  add_model(lda_mod) %>% 
+  add_recipe(titanic_recipe)
+lda_fit <- fit(lda_wkflow, titanic_train)
+```
+
+Q7
+```{r}
+qda_mod <- discrim_quad() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+qda_wkflow <- workflow() %>% 
+  add_model(qda_mod) %>% 
+  add_recipe(titanic_recipe)
+qda_fit <- fit(qda_wkflow, titanic_train)
+```
+
+Q8
+```{r}
+nb_mod <- naive_Bayes() %>% 
+  set_mode("classification") %>% 
+  set_engine("klaR") %>% 
+  set_args(usekernel = FALSE) 
+nb_wkflow <- workflow() %>% 
+  add_model(nb_mod) %>% 
+  add_recipe(titanic_recipe)
+nb_fit <- fit(nb_wkflow, titanic_train)
+```
+
+
+```{r}
+bind_titanic_train=bind_cols(predict(log_fit,new_data=titanic_train,type="class"),
+                             predict(lda_fit,new_data=titanic_train,type="class"),
+                             predict(qda_fit,new_data=titanic_train,type="class"),
+                             predict(nb_fit,new_data=titanic_train,type="class"),
+                             titanic_train$survived)
+```
+Q9
+```{r}
+log_reg_acc <- augment(log_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+log_reg_acc
+```
+```{r}
+lda_acc <- augment(lda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+lda_acc
+```
+```{r}
+qda_acc <- augment(qda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+qda_acc
+```
+```{r}
+nb_acc <- augment(nb_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+nb_acc
+```
+```{r}
+accuracies <- c(log_reg_acc$.estimate, lda_acc$.estimate, 
+                nb_acc$.estimate, qda_acc$.estimate)
+models <- c("Logistic Regression", "LDA", "Naive Bayes", "QDA")
+results <- tibble(accuracies = accuracies, models = models)
+results %>% 
+  arrange(-accuracies)
+```
+logistic regression model is hte most accurate one.
+
+Q10
+```{r}
+predict(log_fit, new_data = titanic_test, type = "prob")
+augment(log_fit, new_data = titanic_test) %>%
+  conf_mat(truth = survived, estimate = .pred_class) 
+```
+```{r}
+augment(log_fit, new_data = titanic_test) %>%
+  roc_curve(survived, .pred_Yes) %>%
+  autoplot()
+```
+```{r}
+augment(log_fit, new_data = titanic_test) %>%
+  roc_auc(survived,.pred_Yes)
+```
+the model did not work very well. The reason for its inaccuracy is probably because of the moodel is made for training accuracy.
