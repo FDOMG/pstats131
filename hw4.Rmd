@@ -1,0 +1,122 @@
+---
+title: "hw4"
+author: "Ruoyu Liang"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(corrr)
+library(poissonreg)
+library(ISLR)
+library(ISLR2)
+library(ggplot2)
+library(yardstick)
+library(rlang)
+library(corrplot)
+library(discrim)
+library(klaR)
+library(pROC)
+library(knitr)
+tidymodels_prefer()
+```
+```{r}
+titanic = read.csv('titanic.csv')
+titanic$pclass <- factor(titanic$pclass)
+titanic$survived <- factor(titanic$survived, ordered=TRUE, levels=c('Yes','No'))
+titanic_split <- initial_split(titanic, prop = 0.80,strata = survived)
+titanic_train <- training(titanic_split)
+titanic_test <- testing(titanic_split)
+set.seed(1202)
+titanic_recipe <- recipe(survived ~ pclass + sex + age + sib_sp + 
+                           parch + fare, data = titanic_train) %>% 
+  step_impute_linear(age) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_interact(terms= ~ starts_with("sex"):fare+
+                  age:fare)
+titanic_recipe
+```
+Q1
+```{r}
+titanic_split <- initial_split(titanic, prop = 0.80,strata = survived)
+dim(titanic_train)
+dim(titanic_test)
+```
+Q2
+```{r}
+train_folds <- vfold_cv(titanic_train, v = 10)
+train_folds
+```
+Q3
+k fold cross-validation is a method that for each mehotd eandomly divide data into k groups of equal sizes. hold out the 1st fold as the validation set and the model is fit on the reamining k-1 folds.Each is to test the limited numberof data sample.
+we use it rather than simply fitting and testing models on the entire training set since k fold cv can generate a less biased model.
+we should use bootstrap for using the entire trainning set.
+
+Q4
+```{r}
+log_reg = logistic_reg() %>% 
+        set_engine("glm") %>% 
+        set_mode("classification")
+log_wkflow = workflow() %>% 
+        add_model(log_reg) %>% 
+        add_recipe(titanic_recipe)
+log_fit = fit(log_wkflow, titanic_train)
+
+lda_mod = discrim_linear() %>%
+        set_engine("MASS") %>%
+        set_mode("classification")
+lda_wkflow = workflow() %>% 
+        add_model(lda_mod) %>% 
+        add_recipe(titanic_recipe)
+lda_fit = fit(lda_wkflow, titanic_train)
+
+qda_mod = discrim_quad() %>% 
+        set_mode("classification") %>% 
+        set_engine("MASS")
+qda_wkflow = workflow() %>% 
+        add_model(qda_mod) %>% 
+        add_recipe(titanic_recipe)
+qda_fit = fit(qda_wkflow, titanic_train)
+```
+there are 30 models in total.
+
+Q5
+```{r}
+log_fit <- fit_resamples(log_wkflow,train_folds)
+lda_fit <- fit_resamples(lda_wkflow,train_folds)
+qda_fit <- fit_resamples(qda_wkflow,train_folds)
+```
+Q6
+```{r}
+collect_metrics(log_fit)
+collect_metrics(lda_fit)
+collect_metrics(qda_fit)
+```
+logistic regression model is the best since it has the highest accuracy of mean value and lowest SD error.
+Q7
+```{r}
+log1_fit = fit(log_wkflow, titanic_train)
+log1_fit
+```
+Q8
+```{r}
+log_pred <- predict(log1_fit, new_data = titanic_test, type = "class")
+bind_cols(log_pred,titanic_test$survived)
+train_acc <- augment(log1_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+train_acc
+test_acc <- augment(log1_fit, new_data = titanic_test) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+test_acc
+```
+testing accuracy :0.8033708
+average accuracy :0.849162
+The two are close to each other but testing accuracy is lower.
