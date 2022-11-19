@@ -1,0 +1,127 @@
+---
+title: "hw5"
+author: "Ruoyu Liang"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE,
+                      warning = FALSE)
+```
+```{r}
+library(tidymodels)
+library(ggplot2)
+library(dbplyr)
+library(corrr)
+library(magrittr)
+library(ISLR)
+library(ISLR2)
+library(klaR)
+library(tidyverse)
+library(glmnet)
+tidymodels_prefer()
+```
+Q1
+```{r}
+library(janitor)
+pokemon<-read.csv('Pokemon.csv')
+pokemon<-clean_names(pokemon)
+pokemon
+```
+data only includes  '_' character, numbers, and letters, it is userful for easing of piping data.
+
+Q2
+```{r}
+ggplot(data=pokemon,aes(x=type_1))+geom_bar()
+pokemon<-pokemon %>%
+  filter(type_1 %in% c("Bug","Fire","Grass","Normal","Water","Psychic"))
+pokemon$type_1<-factor(pokemon$type_1)
+pokemon$legendary<-factor(pokemon$legendary)
+```
+there are 18 classes of outcome.Flying pokemoins are very rare.
+
+Q3
+```{r}
+pokemon_split <- initial_split(pokemon, prop = 0.80,strata = type_1)
+pokemon_train <- training(pokemon_split)
+pokemon_test <- testing(pokemon_split)
+dim(pokemon_train)
+dim(pokemon_test)
+```
+
+```{r}
+pokemon_folds <- vfold_cv(pokemon_train, v = 5, strata=type_1)
+pokemon_folds
+```
+
+Q4
+```{r}
+pokemon_recipe <- recipe(type_1 ~ legendary + generation + sp_atk +
+                           attack + speed + defense+hp+sp_def,
+                         data = pokemon_train) %>% 
+  step_dummy(legendary,generation) %>% 
+  step_center(all_predictors()) %>% 
+  step_scale(all_predictors())
+```
+
+Q5
+```{r}
+pokemon_spec <- 
+  multinom_reg(penalty = tune(), mixture = tune()) %>% 
+  set_mode("classification") %>% 
+  set_engine("glmnet")
+
+pokemon_workflow <- workflow() %>% 
+  add_recipe(pokemon_recipe) %>% 
+  add_model(pokemon_spec)
+
+penalty_grid <- grid_regular(penalty(range = c(-5, 5)), mixture(range=c(0,1)),
+                             levels = 10)
+penalty_grid
+```
+there will be 500 models to folded data.
+
+Q6
+```{r}
+tune_res <- tune_grid(
+  pokemon_workflow,
+  resamples = pokemon_folds, 
+  grid = penalty_grid
+)
+autoplot(tune_res)
+```
+smaller data has better accuracy
+
+Q7
+```{r}
+best_penalty<-select_best(tune_res,metrix="roc_auc")
+pokemon_final<-finalize_workflow(pokemon_workflow,best_penalty)
+pokemon_final_fit <- fit(pokemon_final, data = pokemon_train)
+predict(pokemon_final_fit,new_data=pokemon_test,type="class")
+test_acc<-augment(pokemon_final_fit,new_data=pokemon_test) %>%
+  accuracy(truth=type_1,estimate=.pred_class)
+test_acc
+```
+
+Q8
+```{r}
+augment(pokemon_final_fit,new_data=pokemon_test)%>%
+  roc_auc(type_1,.pred_Bug,.pred_Fire,.pred_Grass,.pred_Normal,
+          .pred_Water,.pred_Psychic)
+```
+```{r}
+augment(pokemon_final_fit,new_data=pokemon_test)%>%
+  roc_curve(type_1,.pred_Bug,.pred_Fire,.pred_Grass,.pred_Normal,
+          .pred_Water,.pred_Psychic)%>%
+  autoplot()
+```
+
+```{r}
+augment(pokemon_final_fit,new_data=pokemon_test)%>%conf_mat(
+  truth=type_1,.pred_class)%>%
+  autoplot(type="heatmap")
+```
+Roc_AUC is 0.5948344. The normal type is best at predicting since it is above ROC curve and psychic type is hardest to predict since it is all below the roc curve.I am not sure why this happened but it might becuase of the size of data for the two types of pokemons.
